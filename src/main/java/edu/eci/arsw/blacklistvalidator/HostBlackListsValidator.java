@@ -10,6 +10,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.ArrayList;
 
 /**
  *
@@ -29,7 +30,7 @@ public class HostBlackListsValidator {
      * @param ipaddress suspicious host's IP address.
      * @return  Blacklists numbers where the given host's IP address was found.
      */
-    public List<Integer> checkHost(String ipaddress){
+    public List<Integer> checkHost(String ipaddress, int n){
         
         LinkedList<Integer> blackListOcurrences=new LinkedList<>();
         
@@ -38,17 +39,39 @@ public class HostBlackListsValidator {
         HostBlacklistsDataSourceFacade skds=HostBlacklistsDataSourceFacade.getInstance();
         
         int checkedListsCount=0;
-        
-        for (int i=0;i<skds.getRegisteredServersCount() && ocurrencesCount<BLACK_LIST_ALARM_COUNT;i++){
-            checkedListsCount++;
-            
-            if (skds.isInBlackListServer(i, ipaddress)){
-                
-                blackListOcurrences.add(i);
-                
-                ocurrencesCount++;
-            }
-        }
+		
+		ArrayList<HostBlackListThread> hilos = new ArrayList<>();
+		
+		int countServers = skds.getRegisteredServersCount();
+		int cantidadServers = countServers / n;
+		int faltantes = countServers % n;
+		int inicio = 0;
+		
+		for(int i = 0; i<n ; i++){
+			
+			if(i == n-1){
+				cantidadServers += faltantes;
+			}
+			
+			hilos.add(new HostBlackListThread(inicio, inicio+cantidadServers, ipaddress, skds));
+			inicio += cantidadServers;
+			
+		}
+		
+		for(HostBlackListThread h: hilos){
+			h.start();
+		}
+		
+		for(HostBlackListThread h: hilos){
+			try{
+				h.join();
+				ocurrencesCount += h.getHostblackListCount();
+				checkedListsCount += h.getHostblackListCheked();
+				blackListOcurrences.addAll(h.getHostblackList());
+			} catch(InterruptedException e){
+				e.printStackTrace();
+			}
+		}
         
         if (ocurrencesCount>=BLACK_LIST_ALARM_COUNT){
             skds.reportAsNotTrustworthy(ipaddress);
